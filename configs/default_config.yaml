@@ -1,0 +1,84 @@
+# default config
+project_name: 'efficient_diffusion_training'
+work_root: 'diffusion_training/checkpoints'
+exp_name: 'exp'
+
+model:
+  model_architecture: "DiT"
+  use_flash_attn: True # use flash-attn API instead of PyTorch SDPA
+  patch_size: 1
+  latent_size: 16
+  interpolation_scale: 1
+  in_channels: 32
+  out_channels: 32
+
+  # args for text encoder
+  text_encoder_name: "meta-llama/Llama-3.2-1B" # HF repo name
+  caption_max_seq_length: 256
+  caption_channels: 2048
+
+  # args for REPA
+  repa_depth: -1 # [0, num_blocks-1], None for not using
+  projector_dim: 2048 
+  z_dims: [768]
+
+training:
+  gradient_accumulation_steps: 1
+  train_batch_size: 256
+  num_workers: 16
+  num_warmup_steps: 500
+  num_train_timesteps: 1000
+  fm_shift: 1.0 # flow matching shift
+  max_iters: 100000
+  class_dropout_prob: 0.1 # dropping prob for classifier-free guidance
+  null_emb_path: 'data/null_emb.pth'
+  scaling_factor: 0.41407 # scaling factor for VAE
+  save_freq: 5000
+  grad_checkpointing: False
+  nblocks_to_apply_grad_checkpointing: -1 # -1 means apply to all blocks
+  gradient_clip: 0.5
+  resume_from: ''
+  start_step: 0
+  use_ema: False
+  ema_rate: 0.99975
+  repa_coeff: 0.5
+  use_precomputed_text_embeddings: True
+
+  # args for timestep sampling
+  weighting_scheme: 'logit_normal' 
+  logit_mean: 0
+  logit_std: 1
+  mode_scale: 1.29
+
+  # args for deferred patch masking
+  patch_mixer_depth: -1 # [0, num_blocks-1], None for not using
+  mask_ratio: 0.5 # ratio for masking
+
+  transformer_ckpt: ''
+
+validation:
+  validation_frequency: 1000
+  seed: 0
+  num_inference_timesteps: 20
+  cfg: 4.5
+  num_images_per_prompt: 1
+
+optimizer:
+  type: 'AdamW'
+  optimizer_kwargs: 
+    lr: 3e-4
+    weight_decay: 3e-2
+    eps: 1e-10
+
+
+dataset:
+  use_dummy_data: False
+  root: '/path_to_remote_storage/diffusion_training_dataset/'
+  local: '/path_to_local_cache/diffusion_training_dataset/'
+  datasets: [
+    'cc12m/mds_latents_dcae_llama3.2-1b/', 
+    'sa1b/mds_latents_dcae_llama3.2-1b/', 
+    'diffdb/mds_latents_dcae_llama3.2-1b/', 
+    'jdb/mds_latents_dcae_llama3.2-1b/train/', 
+    'textcaps/mds_latents_dcae_llama3.2-1b/'
+    ]

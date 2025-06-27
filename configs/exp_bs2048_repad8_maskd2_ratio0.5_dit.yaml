@@ -1,0 +1,8 @@
+exp_name: 'bs2048_repad8_maskd2_ratio0.5_dit'
+model:
+  model_architecture: "DiT"
+  repa_depth: 8
+
+training:
+  patch_mixer_depth: 2
+  mask_ratio: 0.5

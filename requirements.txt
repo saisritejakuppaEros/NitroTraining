@@ -1,0 +1,12 @@
+torch
+torchvision
+diffusers
+transformers
+accelerate
+sentencepiece
+tqdm
+omegaconf
+wandb
+mosaicml-streaming
+bs4
+ftfy

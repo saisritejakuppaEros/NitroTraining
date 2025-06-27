@@ -1,0 +1,26 @@
+exp_name: 'bs2048_norepa_maskd2_ratio0.5_dit_finetune_1024'
+model:
+  model_architecture: "DiT"
+  latent_size: 32
+  interpolation_scale: 2
+  repa_depth: -1
+
+training:
+  fm_shift: 3.0
+  patch_mixer_depth: 2
+  mask_ratio: 0.5
+  transformer_ckpt: 'diffusion_training/checkpoints/bs2048_repad8_maskd2_ratio0.5_dit/model.safetensors'
+  max_iters: 50000
+  use_ema: True
+
+optimizer:
+  type: 'AdamW'
+  opt_kwargs: 
+    lr: 8e-5
+    weight_decay: 0.1
+    eps: 1e-8
+
+dataset:
+  datasets: [
+    'jdb/mds_latents_dcae1024_llama3.2-1b/train/', 
+    ]
