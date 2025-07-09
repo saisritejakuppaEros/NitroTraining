@@ -10,7 +10,7 @@
 ![image_row_4x1](https://github.com/user-attachments/assets/5a4d580d-c8e8-4e1e-9ff1-f8ee880d7e87)
 
 
-Nitro-T is a set of text-to-image diffusion models focused on highly efficient training. Our models achieve competitive scores on image generation benchmarks compared to previous models focused on efficient training while requiring less than 1 day of training from scratch on 32 AMD Instinct<sup>TM</sup> MI300X GPUs. 
+Nitro-T is a family of text-to-image diffusion models focused on highly efficient training. Our models achieve competitive scores on image generation benchmarks compared to previous models focused on efficient training while requiring less than 1 day of training from scratch on 32 AMD Instinct<sup>TM</sup> MI300X GPUs. 
 
 This repository provides training and data preparation scripts to reproduce our results. We hope this codebase for efficient diffusion model training enables researchers to iterate faster on ideas and lowers the barrier for independent developers to build custom models.
 
