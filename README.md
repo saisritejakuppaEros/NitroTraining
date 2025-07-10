@@ -7,7 +7,7 @@
 </div>
 
 ---
-![image_row_4x1](https://github.com/user-attachments/assets/5a4d580d-c8e8-4e1e-9ff1-f8ee880d7e87)
+<img width="4096" height="1024" alt="image_row_4x1" src="https://github.com/user-attachments/assets/c08b33ae-6c04-458c-9ff5-e622a463273e" />
 
 
 Nitro-T is a family of text-to-image diffusion models focused on highly efficient training. Our models achieve competitive scores on image generation benchmarks compared to previous models focused on efficient training while requiring less than 1 day of training from scratch on 32 AMD Instinct<sup>TM</sup> MI300X GPUs. 
