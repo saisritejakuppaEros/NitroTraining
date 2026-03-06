@@ -115,6 +115,7 @@ def write_tar(tars: List[str], args: ArgumentParser):
         compression=None,
         size_limit=256 * (2**20),
         max_workers=64,
+        exist_ok=True,  # Allow restarting if directory exists
     )
 
     resize = transforms.Resize(

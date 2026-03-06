@@ -54,7 +54,7 @@ export NCCL_ALGO=Ring
 export NCCL_TIMEOUT=1800
 export NCCL_DEBUG=WARN
 
-# set -e
+set -e  # Exit on any error
 
 # datadir=${1:-./raw_dataset_output}
 # num_gpus=${2:-4}
@@ -121,20 +121,20 @@ export NCCL_DEBUG=WARN
 # Fix "Too many open files" (Errno 24) - multi-GPU + DataLoader workers + shared memory need higher limit
 ulimit -n 65536 2>/dev/null || true
 
-num_proc=16
-batch_size=128
-num_gpus=6   # set to your actual GPU count
-export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
+num_proc=48
+batch_size=64
+num_gpus=4   # set to your actual GPU count
+export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 S3_BASE="ai-core-object/d-gpu-2b453449-a6ca-4718-b9bd-26b778c9ad7f/d-gpu-06097851-2053-4b67-8400-b5d404c04261/teja/internet_dataset"
-RAW_BASE="/datasets/ai-core-object/d-gpu-06097851-2053-4b67-8400-b5d404c04261/teja/internet_dataset/laionasthetic_v2"
+RAW_BASE="/data/corerndimage/DiffusionModels/datapruning/raw_data"
 S3_LATENTS_BASE="${S3_BASE}/amd_latents"
 
 LOCAL_BASE="./tmp/pipeline"
 LOCAL_MDS="${LOCAL_BASE}/mds"
 LOCAL_LATENTS="${LOCAL_BASE}/latents"
 
-TOTAL_SPLITS=100
+TOTAL_SPLITS=38
 
 # ============================================================
 # HELPERS
@@ -152,7 +152,7 @@ log() {
 # ============================================================
 mkdir -p "${LOCAL_MDS}" "${LOCAL_LATENTS}"
 
-for i in $(seq 2 $((TOTAL_SPLITS - 1))); do
+for i in $(seq 35 $((TOTAL_SPLITS - 1))); do
     SPLIT=$(pad_split "$i")
     log "========================================================"
     log "Processing ${SPLIT} (${i}/${TOTAL_SPLITS})"
@@ -162,6 +162,8 @@ for i in $(seq 2 $((TOTAL_SPLITS - 1))); do
     MDS_DIR="${LOCAL_MDS}/${SPLIT}"
     LATENTS_DIR="${LOCAL_LATENTS}/${SPLIT}"
 
+    # Clean MDS/latents dirs before starting (avoids FileExistsError from leftover data)
+    # rm -rf "${MDS_DIR}" "${LATENTS_DIR}"
     mkdir -p "${MDS_DIR}" "${LATENTS_DIR}"
 
     # ----------------------------------------------------------
@@ -173,6 +175,12 @@ for i in $(seq 2 $((TOTAL_SPLITS - 1))); do
         --local_mds_dir "${MDS_DIR}" \
         --max_image_size 512 \
         --num_proc ${num_proc}
+    
+    # Verify conversion succeeded by checking for index.json
+    if [ ! -f "${MDS_DIR}/index.json" ]; then
+        log "ERROR: MDS conversion failed - index.json not found at ${MDS_DIR}/index.json"
+        exit 1
+    fi
     log "[${SPLIT}] MDS conversion done."
 
     # ----------------------------------------------------------
@@ -185,8 +193,8 @@ for i in $(seq 2 $((TOTAL_SPLITS - 1))); do
     # ----------------------------------------------------------
     log "[${SPLIT}] Precomputing latents..."
     # num_processes MUST match GPU count (CUDA_VISIBLE_DEVICES) to avoid "Duplicate GPU detected"
+    # (config_file alternative: --config_file /path/to/accelerate_config.yaml)
     ACCELERATE_USE_CUDA_VISIBLE_DEVICES=1 accelerate launch \
-        --config_file /mnt/data0/teja/data_pruning/training/Nitro-T/configs/accelerate_config.yaml \
         --num_processes ${num_gpus} \
         prepare/raw_dataset/precompute.py \
         --datadir "${MDS_DIR}" \
@@ -200,17 +208,16 @@ for i in $(seq 2 $((TOTAL_SPLITS - 1))); do
     # STEP 4: Push latents to S3, delete local immediately after
     # ----------------------------------------------------------
     log "[${SPLIT}] Pushing latents to S3..."
-    mc mirror \
+    mc-minio mirror \
         --overwrite \
         --retry \
         --max-workers 4 \
-        "${LATENTS_DIR}/" \
-        "${S3_LATENTS_BASE}/${SPLIT}/"
+        "${LATENTS_DIR}" \
+        "${S3_LATENTS_BASE}/${SPLIT}"
 
     log "[${SPLIT}] Push complete. Removing local MDS + latents..."
     rm -rf "${MDS_DIR}" "${LATENTS_DIR}"
     log "[${SPLIT}] Local data removed."
-
     log "[${SPLIT}] Done."
 
     # break the loop
