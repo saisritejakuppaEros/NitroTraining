@@ -22,7 +22,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-import wandb
 from core.loss import calculate_diffusion_loss, calculate_repa_loss
 from core.models.model_utils import build_model, build_pipeline
 from core.optimizer import build_optimizer
@@ -40,7 +39,7 @@ logging.basicConfig(level=logging.INFO)
 logger = get_logger(__name__)
 
 
-def log_validation(transformer_state_dict, accelerator, cfg):
+def log_validation(transformer_state_dict, accelerator, cfg, step=0, save_dir=None):
     from data.validation_prompts import validation_prompts
 
     logger.info("Running validation... ")
@@ -81,18 +80,16 @@ def log_validation(transformer_state_dict, accelerator, cfg):
             images.append(image)
         image_logs.append({"validation_prompt": prompt, "images": images})
 
-    for tracker in accelerator.trackers:
-        if tracker.name == "wandb":
-            formatted_images = []
-            for log in image_logs:
-                images = log["images"]
-                validation_prompt = log["validation_prompt"]
-                for image in images:
-                    image = wandb.Image(image, caption=validation_prompt)
-                    formatted_images.append(image)
-            tracker.log({f"validation": formatted_images})
-        else:
-            logger.warn(f"image logging not implemented for {tracker.name}")
+    if save_dir:
+        step_dir = os.path.join(save_dir, f"step_{step}")
+        os.makedirs(step_dir, exist_ok=True)
+        for i, log in enumerate(image_logs):
+            prompt = log["validation_prompt"]
+            for j, img in enumerate(log["images"]):
+                safe_prompt = "".join(c if c.isalnum() or c in " -_" else "_" for c in prompt[:50])
+                path = os.path.join(step_dir, f"{i:02d}_{safe_prompt}_{j}.png")
+                img.save(path)
+        logger.info(f"Saved validation images to {step_dir}")
 
     return image_logs
 
@@ -103,14 +100,19 @@ def main(args):
     custom_cfg = OmegaConf.load(args.config)
     cfg = OmegaConf.merge(default_cfg, custom_cfg)
 
-    project_dir = os.path.join(cfg.work_root, cfg.exp_name)
+    project_dir = (
+        cfg.output_dir
+        if hasattr(cfg, "output_dir") and cfg.output_dir
+        else os.path.join(cfg.work_root, cfg.exp_name)
+    )
 
     # init accelerator
     init_handler = InitProcessGroupKwargs()
     init_handler.timeout = datetime.timedelta(seconds=5400)  # change timeout to avoid a strange NCCL bug
     accelerator = Accelerator(
         gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
-        log_with="wandb",
+        log_with="tensorboard",
+        project_dir=project_dir,
         kwargs_handlers=[init_handler],
         step_scheduler_with_optimizer=False,
     )
@@ -121,10 +123,24 @@ def main(args):
     if accelerator.is_main_process:
         os.makedirs(project_dir, exist_ok=True)
         OmegaConf.save(config=cfg, f=os.path.join(project_dir, "config.yaml"))
+        
+        # Flatten config to scalar values only for TensorBoard
+        def flatten_config(d, parent_key='', sep='_'):
+            items = []
+            for k, v in d.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(flatten_config(v, new_key, sep=sep).items())
+                elif isinstance(v, (int, float, str, bool)):
+                    items.append((new_key, v))
+                elif isinstance(v, list) and len(v) > 0 and all(isinstance(x, (int, float, str, bool)) for x in v):
+                    items.append((new_key, str(v)))
+            return dict(items)
+        
+        flat_config = flatten_config(OmegaConf.to_container(cfg, resolve=True))
         accelerator.init_trackers(
             project_name=cfg.project_name,
-            config=OmegaConf.to_container(cfg, resolve=True),
-            init_kwargs={"wandb": {"name": cfg.exp_name}},
+            config=flat_config,
         )
 
     total_batch_size = (
@@ -258,6 +274,8 @@ def main(args):
     # start training
     while True:
         for _, batch in enumerate(train_dataloader):
+            if batch is None:
+                continue
             move_to_device(batch, accelerator.device)
 
             if cfg.training.use_precomputed_text_embeddings:
@@ -394,7 +412,8 @@ def main(args):
                     model_to_validate = model_ema if cfg.training.use_ema else model
                     model_state_dict = accelerator.get_state_dict(accelerator.unwrap_model(model_to_validate, keep_torch_compile=False))
                     if accelerator.is_main_process:
-                        log_validation(model_state_dict, accelerator, cfg)
+                        val_dir = os.path.join(project_dir, "validation_images")
+                        log_validation(model_state_dict, accelerator, cfg, step=global_step, save_dir=val_dir)
                     torch.cuda.empty_cache()
 
                 accelerator.wait_for_everyone()

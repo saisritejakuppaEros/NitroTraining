@@ -1,0 +1,10 @@
+# Training config for laionasthetic precomputed latents
+exp_name: 'laionasthetic_dit_512'
+
+model:
+  use_flash_attn: False  # Use PyTorch SDPA instead (flash_attn not installed)
+
+dataset:
+  root: '/mnt/data0/teja/data_pruning/training/Nitro-T/core/datasets/raw_dataset_output'
+  local: '/mnt/data0/teja/data_pruning/training/Nitro-T/core/datasets/raw_dataset_output'
+  datasets: ['mds_latents_dcae_llama3.2-1b/']

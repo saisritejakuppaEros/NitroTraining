@@ -2,3 +2,6 @@ wandb
 __pycache__
 validation_images/
 scratchpad/
+diffusion_training/checkpoints/laionasthetic_dit_512
+core/datasets/tmp
+outputs/

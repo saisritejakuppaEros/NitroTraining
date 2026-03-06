@@ -1,7 +1,9 @@
 # default config
 project_name: 'efficient_diffusion_training'
-work_root: 'diffusion_training/checkpoints'
+work_root: 'outputs/diffusion_training_v1/checkpoints'
 exp_name: 'exp'
+# Optional: override save path. If set, all outputs go here instead of work_root/exp_name.
+# output_dir: '/mnt/data1/my_experiments/run_001'
 
 model:
   model_architecture: "DiT"
@@ -75,6 +77,9 @@ dataset:
   use_dummy_data: False
   root: '/path_to_remote_storage/diffusion_training_dataset/'
   local: '/path_to_local_cache/diffusion_training_dataset/'
+  # Path to file with image paths to exclude (one per line). For data pruning experiments:
+  # run pruning to get a list of paths to drop, then set this to exclude them during training.
+  exclude_image_paths: ''
   datasets: [
     'cc12m/mds_latents_dcae_llama3.2-1b/', 
     'sa1b/mds_latents_dcae_llama3.2-1b/', 

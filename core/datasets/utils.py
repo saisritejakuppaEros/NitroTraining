@@ -18,10 +18,14 @@ import re
 import urllib.parse as ul
 from typing import Dict, List, Optional, Tuple, Union
 
+import warnings
+
 import ftfy
 import torch
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 from transformers import T5EncoderModel, T5Tokenizer, AutoModelForCausalLM, AutoTokenizer
+
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 DATA_TYPES = {
     "float16": torch.float16,

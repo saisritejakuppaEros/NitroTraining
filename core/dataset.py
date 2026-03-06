@@ -33,6 +33,7 @@ class StreamingLatentsDataset(StreamingDataset):
         caption_max_seq_length: Optional[int] = None,
         caption_channels: Optional[int] = None,
         load_precomputed_text_embeddings: bool = True,
+        exclude_image_paths: Optional[str] = None,
         batch_size: Optional[int] = None,
         **kwargs
     ) -> None:
@@ -48,12 +49,18 @@ class StreamingLatentsDataset(StreamingDataset):
         self.caption_max_seq_length = caption_max_seq_length
         self.caption_channels = caption_channels
         self.load_precomputed_text_embeddings = load_precomputed_text_embeddings
+        self._exclude_paths: set = set()
+        if exclude_image_paths and os.path.isfile(exclude_image_paths):
+            with open(exclude_image_paths) as f:
+                self._exclude_paths = {line.strip() for line in f if line.strip()}
 
-    def __getitem__(self, index: int) -> Dict[str, Union[torch.Tensor, str, float]]:
+    def __getitem__(self, index: int) -> Optional[Dict[str, Union[torch.Tensor, str, float]]]:
         sample = super().__getitem__(index)
 
-        processed_sample = {}
+        if self._exclude_paths and sample.get("image_path", "") in self._exclude_paths:
+            return None
 
+        processed_sample = {}
         processed_sample["captions"] = sample["caption"]
 
         if self.load_precomputed_text_embeddings:
@@ -83,6 +90,14 @@ class StreamingLatentsDataset(StreamingDataset):
 
 
 # Modified from: https://github.com/SonyResearch/micro_diffusion/blob/main/micro_diffusion/datasets/latents_loader.py
+def _collate_filter_none(batch):
+    """Collate that filters out None (excluded samples from data pruning)."""
+    batch = [b for b in batch if b is not None]
+    if not batch:
+        return None
+    return torch.utils.data.dataloader.default_collate(batch)
+
+
 def build_streaming_latents_dataloader(
     dataset_config,
     batch_size: int,
@@ -94,7 +109,13 @@ def build_streaming_latents_dataloader(
     drop_last: bool = True,
     **dataloader_kwargs
 ) -> DataLoader:
-    """Creates a DataLoader for streaming latents dataset."""
+    """Creates a DataLoader for streaming latents dataset.
+
+    Args:
+        dataset_config.exclude_image_paths: Path to file with image paths to exclude
+            (one per line). Used for data pruning - exclude low-quality/redundant
+            samples from training. Only applies to datasets with image_path field.
+    """
 
     streams = [
         Stream(
@@ -104,6 +125,8 @@ def build_streaming_latents_dataloader(
         for d in dataset_config.datasets
     ]
 
+    exclude_image_paths = getattr(dataset_config, "exclude_image_paths", None) or ""
+
     dataset = StreamingLatentsDataset(
         streams=streams,
         shuffle=shuffle,
@@ -111,14 +134,18 @@ def build_streaming_latents_dataloader(
         caption_max_seq_length=caption_max_seq_length,
         caption_channels=caption_channels,
         load_precomputed_text_embeddings=load_precomputed_text_embeddings,
+        exclude_image_paths=exclude_image_paths if exclude_image_paths else None,
         batch_size=batch_size,
     )
+
+    collate_fn = _collate_filter_none if exclude_image_paths else None
 
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=batch_size,
         sampler=None,
         drop_last=drop_last,
+        collate_fn=collate_fn,
         persistent_workers=True,
         **dataloader_kwargs,
     )
